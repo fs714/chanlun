@@ -10,8 +10,8 @@ const int ChanlunCore::DIR_UP = 1;
 const int ChanlunCore::DIR_DN = -1;
 const int ChanlunCore::DIR_XBH = -2;
 const int ChanlunCore::DIR_SBH = 2;
-const int ChanlunCore::QK_N = 0; // 不存在缺口
-const int ChanlunCore::QK_Y = 1; // 存在缺口
+const int ChanlunCore::QK_N = 0;	// 不存在缺口
+const int ChanlunCore::QK_Y = 1;	// 存在缺口
 
 ChanlunCore::ChanlunCore()
 {
@@ -38,45 +38,46 @@ ChanlunCore* ChanlunCore::GetInstance()
 	return instance;
 }
 
+// 初始化笔缺口
 void ChanlunCore::initBiQK(CALCINFO* pData)
 {
+	// Question
 	const qk = 0.005;
 	if(NULL == pData) return;
 
 	switch(pData->m_dataType)
 	{
-	case MIN1_DATA: // 1F
+	case MIN1_DATA:				// 1分钟线
 		biQuekou = qk;
-	case MIN5_DATA:					//5分钟线		
+	case MIN5_DATA:				// 5分钟线		
 		biQuekou = qk * 3;
-	case MIN15_DATA:					//15分钟线
+	case MIN15_DATA:			// 15分钟线
 		biQuekou = qk * 6;
-	case MIN30_DATA:					//30分钟线
+	case MIN30_DATA:			// 30分钟线
 		biQuekou = qk * 9;
-	case MIN60_DATA:					//60分钟线
+	case MIN60_DATA:			// 60分钟线
 		biQuekou = qk * 18;
-	case DAY_DATA:					//日线
+	case DAY_DATA:				// 日线
 		biQuekou = qk * 30;
-	case WEEK_DATA:					//周线
+	case WEEK_DATA:				// 周线
 		biQuekou = qk * 90;
-	case MONTH_DATA:					//月线
+	case MONTH_DATA:			// 月线
 		biQuekou = qk * 250;
-		//case YEAR_DATA:				//没有年线？？
-		//	biQuekou = qk * 1000;
-		
+	// case YEAR_DATA:			//没有年线？？
+		// biQuekou = qk * 1000;
 	default:
 		biQuekou = qk * 1000;
 	}
 }
 
+// 初始化K线及其包含关系
 void ChanlunCore::initKx(CALCINFO* pData)
 {
 	if(!kxData.empty()) kxData.clear();
 
-	if (NULL != pData && pData->m_nNumData>0) 
+	if (NULL != pData && pData->m_nNumData>0)
 	{
 		initBiQK(pData);
-
 
 		float h=0, l=0, h1=0, l1=0;
 		int dir = 0;
@@ -88,7 +89,9 @@ void ChanlunCore::initKx(CALCINFO* pData)
 		h = pData->m_pData[dt, i].m_fHigh;
 		l = pData->m_pData[dt, i].m_fLow;
 		*/
+
 		// 处理包含关系
+		// 如果前两根K线具有包含关系，按照向上走势处理
 		for(int i=0; i<pData->m_nNumData; i++)
 		{
 			h = pData->m_pData[i].m_fHigh;
@@ -106,12 +109,9 @@ void ChanlunCore::initKx(CALCINFO* pData)
 					
 					dir = DIR_SBH;
 				}
-				
-				
 			}
 			else if (dir < DIR_0)
 			{
-				
 				// 存在包含关系
 				if ((h>=h1 && l<=l1) 
 					|| (h<=h1 && l>=l1))
@@ -122,8 +122,6 @@ void ChanlunCore::initKx(CALCINFO* pData)
 					
 					dir = DIR_XBH;
 				}
-				
-				
 			}
 			
 			if(h>h1 && l>l1)
@@ -134,6 +132,7 @@ void ChanlunCore::initKx(CALCINFO* pData)
 				dir = DIR_DN;
 			}
 			
+			// TODO: low和rlow，high和rhigh都永远相等?
 			ckx kx;
 			kx.low = l;
 			kx.high = h;
@@ -149,368 +148,377 @@ void ChanlunCore::initKx(CALCINFO* pData)
 			h1 = h;
 			l1 = l;
 			
+			// 每根K线都会被push回kxData，但是它的高点和低点是合并后的值
 			kxData.push_back(kx);
 		}
 	}
 }
 
+// 初始化分型
 void ChanlunCore::initFX()
 {
-		int kxnum = kxData.size();
-		if(kxnum <= 5) return;
+	int kxnum = kxData.size();
+	if(kxnum <= 5) return;
 
-		int i = 0, j = 0, k = 0;
+	int i = 0, j = 0, k = 0;
 
-		float h = 0, h11 = 0, h12 = 0, h13 = 0, h21 = 0;
-		float l = 0, l11 = 0, l12 = 0, l13 = 0, l21 = 0;
-		float p31 = 0, p32 = 0, p33 = 0, quekou = 0;
-		bool tjg1 = false, tjd1 = false, tjc = false;
+	float h = 0;	// 当前K线的高点
+	float h11 = 0;	// 当前K线前面第1根的高点
+	float h12 = 0;	// 当前K线前面第2根的高点
+	float h13 = 0;	// 当前K线前面第3根的高点
+	float h21 = 0;	// 当前K线后面第1根的高点
+	float l = 0;	// 当前K线的低点
+	float l11 = 0;	// 当前K线前面第1根的低点
+	float l12 = 0;	// 当前K线前面第2根的低点
+	float l13 = 0;	// 当前K线前面第3根的低点
+	float l21 = 0;	// 当前K线后面第1根的低点
+
+	float p31 = 0, p32 = 0, p33 = 0, quekou = 0;
+	bool tjg1 = false, tjd1 = false, tjc = false;
+
+	// 间隔(jg)
+	int jg = 0, jg2 = 0; // 至少5根K线
+	int gdnum = 0;  //顶底数量
+
+	int tj_jg = 3, tj_jg2 = 3;
+	//if (pData->m_dataType > WEEK_DATA) tj_jg = 4;
+
+	CKXIT kx, kxt, kxl, kxlg, kxld;
 		
-		int jg = 0, jg2 = 0; // 至少5根K线
-		int gdnum = 0;  //顶底数量
+	kx = kxData.begin();
+	kx = getCKX(2);
 
-		int tj_jg = 3, tj_jg2 = 3;
-		//if (pData->m_dataType > WEEK_DATA) tj_jg = 4;
+	// 标出顶底分型
+	for(i=2; i<kxnum-1; i++, kx++)
+	{
+		jg++;
+		//if(DIR_DN==kx->dir || DIR_UP==kx->dir) jg2++; // 处理包含关系后的间隔
 
-		CKXIT kx, kxt, kxl, kxlg, kxld;
+		h11 = 0, h12 = 0, h13 = 0, h21 = 0, l11 = 0, l12 = 0, l13 = 0,  l21 = 0, p31 = 0, p32 = 0, p33 = 0;
+		tjg1 = false, tjd1 = false;
+
+		h = kx->high;
+		l = kx->low;
+			
+		j = i;
+		kxt = kx;			
+		// 基于合并后每根K线的属性，找到和当前K线高点一样的第一根K线的前一根
+		do {
+			j = j - 1;
+			if(j>0) 
+			{
+				kxt--;
+				h11 = kxt->high;
+				l11 = kxt->low;
+			}			
+		} while(h11 == h && j>0);
 		
-		kx = kxData.begin();
-		kx = getCKX(2);
-
-		// 标出顶底分型
-		for(i=2; i<kxnum-1; i++, kx++)
+		// 前面第2根
+		// Question: 为什么不考虑合并的情况
+		j = j - 1;
+		if(j>0) 
 		{
-			jg++;
-			//if(DIR_DN==kx->dir || DIR_UP==kx->dir) jg2++; // 处理包含关系后的间隔
-
-			h11 = 0, h12 = 0, h13 = 0, h21 = 0, l11 = 0, l12 = 0, l13 = 0,  l21 = 0, p31 = 0, p32 = 0, p33 = 0;
+			kxt--;
+			h12 = kxt->high;	
+		}			
 			
-			tjg1 = false, tjd1 = false;
+		// 前面第3根
+		j = j - 1;
+		if(j>0) 
+		{
+			kxt--;
+			h13 = kxt->high;	
+		}			
 
-			h = kx->high;
-			l = kx->low;
+		k = i;
+		kxt = kx;
+		// 基于合并后每根K线的属性，找到和当前K线高点一样的最后一根K线的后一根
+		do {
+			k = k + 1;
+			if(k<kxnum-1) 
+			{
+				kxt++;
+				h21 = kxt->high;	
+				l21 = kxt->low;
+			}			
+		} while(h21 == h && k<kxnum-1);
+
+		// 顶判断
+		// 1. 缠论定义
+		// 2. 最高 > 顶分的前2根K线的高点
+		tjg1 = h>h11 && h>h21 && h>h12 && h>h13;
 			
+		// 非顶
+		if(!tjg1)
+		{				
 			j = i;
 			kxt = kx;			
-			// 前第一个高点
+			// 基于合并后每根K线的属性，找到和当前K线低点一样的第一根K线的前一根
 			do {
 				j = j - 1;
-				if(j>0) 
+				if(j>0)
 				{
 					kxt--;
 					h11 = kxt->high;
 					l11 = kxt->low;
-				}			
-			} while(h11 == h && j>0);
-			// 前第二个高点
-				j = j - 1;
-				if(j>0) 
-				{
-					kxt--;
-					h12 = kxt->high;	
-				}			
-			
-			// 前第三个高点
-				j = j - 1;
-				if(j>0) 
-				{
-					kxt--;
-					h13 = kxt->high;	
-				}			
+				}
+			} while(l11 == l && j>0);
+
+			// 前面第2根
+			j = j - 1;
+			if(j>0) 
+			{
+				kxt--;
+				h12 = kxt->high;	
+				l12 = kxt->low;
+			}
+
+			// 前面第3根
+			j = j - 1;
+			if(j>0) 
+			{
+				kxt--;
+				h13 = kxt->high;
+				l13 = kxt->low;
+			}			
 
 			k = i;
 			kxt = kx;
-			// 后第一个高点
+			// 基于合并后每根K线的属性，找到和当前K线低点一样的最后一根K线的后一根
 			do {
 				k = k + 1;
-				if(k<kxnum-1) 
+				if(k<kxnum-1)
 				{
 					kxt++;
-					h21 = kxt->high;	
+					h21 = kxt->high;
 					l21 = kxt->low;
 				}			
-			} while(h21 == h && k<kxnum-1);
-			
-			// 顶判断 缠论定义 以及 最高>顶分的前2根K线的高点
-			tjg1 = h>h11 && h>h21 && h>h12 && h>h13 ;
-			
-			// 非顶
-			if(!tjg1)
-			{				
-				j = i;
-				kxt = kx;			
-				// 前第一个低点
-				do {
-					j = j - 1;
-					if(j>0) 
-					{
-						kxt--;
-						h11 = kxt->high;	
-						l11 = kxt->low;
-					}			
-				} while(l11 == l && j>0);
-				// 前第2个低点
-				j = j - 1;
-				if(j>0) 
-				{
-					kxt--;
-					h12 = kxt->high;	
-					l12 = kxt->low;
-				}			
-			
-				// 前第3个低点
-				j = j - 1;
-				if(j>0) 
-				{
-					kxt--;
-					h13 = kxt->high;
-					l13 = kxt->low;
-				}			
+			} while(l21 == l && k<kxnum-1);
 
-				
-				k = i;
-				kxt = kx;
-				// 后第一个低点
-				do {
-					k = k + 1;
-					if(k<kxnum-1) 
-					{
-						kxt++;
-						h21 = kxt->high;	
-						l21 = kxt->low;
-					}			
-				} while(l21 == l && k<kxnum-1);
-				
-				// 底判断 缠论定义 以及 最低<底分的前2根K线的低点
-				tjd1 = l<l11 && l<l21 && l<l13 && l<l12;
-			} // 非顶
-			
-			
-			// 标出顶底分型
-			if (tjg1 || tjd1)
-			{
-				if (0 == gdnum)
-				{
-					// 第一个分型
-					if (tjg1)
-					{
-						kx->flag = DIR_UP;
-						kxlg = kx;
-					}
-					else if (tjd1)
-					{
-						kx->flag = DIR_DN;
-						kxld = kx;
-					}
-					kxl = kx;
-					gdnum++;
-					jg = 1;
-					jg2 = 1;
-				}
-				else
-				{
-					if (tjg1)
-					{
-						// 计算边界
-						kxt = kx;
-						kxt--;
-						p31 = kxt->low;
-						kx->fxqj = p31;
-						// 如果存在缺口 缺口边界就未本K线的顶底 (上涨缺口)
-						
-						if (i>1)
-						{
-							j = i - 1;
-							//quekou = pData->m_pData[i].m_fLow - pData->m_pData[j].m_fHigh;
-							quekou = kx->rlow - kxt->rhigh;
-							if(quekou >= biQuekou)
-							{
-								kx->fxqj = kx->low;
-							}
-						}
-						
-
-						// 顶接顶 价高为新顶
-						if(DIR_UP == kxl->flag)
-						{
-							if(kx->high > kxl->high)
-							{
-								kx->flag = DIR_UP;
-								gdnum++;
-								jg = 1;
-								//jg2 = 1;
-								
-								kxl->flag = DIR_SBH;
-								kxl = kx;		
-								kxlg = kx;
-							}
-							else
-							{
-								//kx->flag = DIR_SBH;
-							}
-						}
-						else
-						{
-							// 底接顶 
-							// 包含后的K线至少3跟 构成顶分 最高值必须大于前低分高（不再顶的分型区间内）
-							if(jg >= tj_jg && kx->high > kxl->fxqj && kx->fxqj > kxl->low)
-							{
-								kx->flag = DIR_UP;
-								gdnum++;
-								jg = 1;
-								jg2 = 1;
-								
-								kxl = kx;
-								kxlg = kx;
-							}
-							else if(jg == 2)
-							{
-								
-								// 1 存在缺口(上涨) 2 大于前顶
-								
-								if(i>1 && quekou  >= biQuekou)
-								{
-									// 存在缺口 顶分成立 前底分也有效 
-									kx->flag = DIR_UP;
-									gdnum++;
-									jg = 1;
-									jg2 = 1;
-									
-									kxl = kx;
-									kxlg = kx;
-								}
-								else if(gdnum>=4 && quekou  < biQuekou && kx->high > kxlg->high)
-								{
-									// 大于前顶， 前底失效 前顶失效
-									kx->flag = DIR_UP;
-									kxlg->flag = DIR_SBH;
-									kxld->flag = DIR_0;
-
-									gdnum++;
-									jg = 1;
-									jg2 = 1;
-									
-									kxl = kx;
-									kxlg = kx;
-									
-								}
-							}
-						}
-					}
-					else if (tjd1)
-					{
-						// 计算边界
-						kxt = kx;
-						kxt--;
-						p31 = kxt->high;
-						kx->fxqj = p31;
-						// 如果存在缺口 缺口边界就未本K线的顶底 (下跌缺口)
-						if(i>1)
-						{
-							j = i - 1;
-							//quekou = -(pData->m_pData[i].m_fHigh - pData->m_pData[j].m_fLow);
-							quekou = -(kx->rhigh - kxt->rlow);
-							if(quekou>=biQuekou)
-							{
-								kx->fxqj = kx->high;
-							}
-						}
-
-
-						// 底接底 价低为新底
-						if(DIR_DN == kxl->flag)
-						{
-							if(kx->low < kxl->low)
-							{
-								kx->flag = DIR_DN;
-								gdnum++;
-								jg = 1;
-								jg2 = 1;
-								
-								kxl->flag = DIR_XBH;
-								kxl = kx;
-								kxld = kx;
-							}
-							else
-							{
-								//kx->flag = DIR_XBH;
-							}
-						}
-						else
-						{
-							// 顶接底 包含后的K线至少3 构成底分 最低值必须小于前顶低 不再顶区间内
-							if(jg >= tj_jg && kx->low < kxl->fxqj && kx->fxqj < kxl->high)
-							{
-								kx->flag = DIR_DN;
-								gdnum++;
-								jg = 1;
-								jg2 = 1;
-								
-								kxl = kx;
-								kxld = kx;
-							}
-							else if(jg == 2)
-							{
-								// 1 存在缺口(下跌) 2 小于前底
-								if(i>1 && quekou  >= biQuekou)
-								{
-									// 存在缺口 顶分成立 前底分也有效 
-									kx->flag = DIR_DN;
-									gdnum++;
-									jg = 1;
-									jg2 = 1;
-									
-									kxl = kx;
-									kxld = kx;
-								}
-								
-								else if(gdnum>=4 && quekou  < biQuekou  && kx->low < kxld->low)
-								{
-									// 大于前顶， 前底失效 前顶失效
-									kx->flag = DIR_DN;
-									kxld->flag = DIR_XBH;
-									kxlg->flag = DIR_0;
-									
-									gdnum++;
-									jg = 1;
-									jg2 = 1;
-									
-									kxl = kx;
-									kxld = kx;
-								}
-							}
-						}
-					}					
-				}
-			} // end 顶底
-			else 
-			{
-				// do nothing
-			} // end else  非顶底
-
-
-		} // end for 标出顶底分型
-
-		
-		// 当下 
-		kxt = kxData.end();
-		kxt--; // 最后一根K线
-		// 非顶 非底 用于判断当下 顶底未成之前
-		// 创新高 低 必然产生新的高点和低点 去掉前一个高低点 注意必须是高高 低低
-		if (DIR_UP == kxl->flag)
-		{
-			if(kxt->high > kxl->high)
-			{
-				kxl->flag = DIR_SBH;
-			}
+			// 底判断
+			// 1. 缠论定义
+			// 2. 最低 < 底分的前2根K线的低点
+			tjd1 = l<l11 && l<l21 && l<l13 && l<l12;
 		}
-		else if(DIR_DN == kxl->flag)
+
+		// 标出顶底分型
+		if (tjg1 || tjd1)
 		{
-			if (kxt->low < kxl->low)
+			if (0 == gdnum)
 			{
-				kxl->flag = DIR_XBH;
+				// 第一个分型
+				if (tjg1)
+				{
+					kx->flag = DIR_UP;
+					kxlg = kx;
+				}
+				else if (tjd1)
+				{
+					kx->flag = DIR_DN;
+					kxld = kx;
+				}
+				kxl = kx;
+				gdnum++;
+				jg = 1;
+				jg2 = 1;
 			}
-		}	
+			else
+			{
+				if (tjg1)
+				{
+					// 计算边界
+					// Question: 分型区间的定义
+					kxt = kx;
+					kxt--;
+					p31 = kxt->low;
+					kx->fxqj = p31;
+					// 如果存在缺口 缺口边界就未本K线的顶底 (上涨缺口)
+					
+					if (i>1)
+					{
+						j = i - 1;
+						//quekou = pData->m_pData[i].m_fLow - pData->m_pData[j].m_fHigh;
+						quekou = kx->rlow - kxt->rhigh;
+						if(quekou >= biQuekou)
+						{
+							kx->fxqj = kx->low;
+						}
+					}
+					
+					// 顶接顶 价高为新顶
+					if(DIR_UP == kxl->flag)
+					{
+						if(kx->high > kxl->high)
+						{
+							kx->flag = DIR_UP;
+							gdnum++;
+							jg = 1;
+							//jg2 = 1;
+							
+							kxl->flag = DIR_SBH;
+							kxl = kx;		
+							kxlg = kx;
+						}
+						else
+						{
+							//kx->flag = DIR_SBH;
+						}
+					}
+					else
+					{
+						// 底接顶 
+						// 包含后的K线至少3跟 构成顶分 最高值必须大于前低分高（不再顶的分型区间内）
+						if(jg >= tj_jg && kx->high > kxl->fxqj && kx->fxqj > kxl->low)
+						{
+							kx->flag = DIR_UP;
+							gdnum++;
+							jg = 1;
+							jg2 = 1;
+							
+							kxl = kx;
+							kxlg = kx;
+						}
+						else if(jg == 2)
+						{
+							// 1 存在缺口(上涨) 2 大于前顶
+							if(i>1 && quekou  >= biQuekou)
+							{
+								// 存在缺口 顶分成立 前底分也有效 
+								kx->flag = DIR_UP;
+								gdnum++;
+								jg = 1;
+								jg2 = 1;
+								
+								kxl = kx;
+								kxlg = kx;
+							}
+							else if(gdnum>=4 && quekou  < biQuekou && kx->high > kxlg->high)
+							{
+								// 大于前顶， 前底失效 前顶失效
+								kx->flag = DIR_UP;
+								kxlg->flag = DIR_SBH;
+								kxld->flag = DIR_0;
+
+								gdnum++;
+								jg = 1;
+								jg2 = 1;
+								
+								kxl = kx;
+								kxlg = kx;
+							}
+						}
+					}
+				}
+				else if (tjd1)
+				{
+					// 计算边界
+					kxt = kx;
+					kxt--;
+					p31 = kxt->high;
+					kx->fxqj = p31;
+					// 如果存在缺口 缺口边界就未本K线的顶底 (下跌缺口)
+					if(i>1)
+					{
+						j = i - 1;
+						//quekou = -(pData->m_pData[i].m_fHigh - pData->m_pData[j].m_fLow);
+						quekou = -(kx->rhigh - kxt->rlow);
+						if(quekou>=biQuekou)
+						{
+							kx->fxqj = kx->high;
+						}
+					}
+
+					// 底接底 价低为新底
+					if(DIR_DN == kxl->flag)
+					{
+						if(kx->low < kxl->low)
+						{
+							kx->flag = DIR_DN;
+							gdnum++;
+							jg = 1;
+							jg2 = 1;
+							
+							kxl->flag = DIR_XBH;
+							kxl = kx;
+							kxld = kx;
+						}
+						else
+						{
+							//kx->flag = DIR_XBH;
+						}
+					}
+					else
+					{
+						// 顶接底 包含后的K线至少3 构成底分 最低值必须小于前顶低 不再顶区间内
+						if(jg >= tj_jg && kx->low < kxl->fxqj && kx->fxqj < kxl->high)
+						{
+							kx->flag = DIR_DN;
+							gdnum++;
+							jg = 1;
+							jg2 = 1;
+							
+							kxl = kx;
+							kxld = kx;
+						}
+						else if(jg == 2)
+						{
+							// 1 存在缺口(下跌) 2 小于前底
+							if(i>1 && quekou  >= biQuekou)
+							{
+								// 存在缺口 顶分成立 前底分也有效 
+								kx->flag = DIR_DN;
+								gdnum++;
+								jg = 1;
+								jg2 = 1;
+								
+								kxl = kx;
+								kxld = kx;
+							}
+							
+							else if(gdnum>=4 && quekou  < biQuekou  && kx->low < kxld->low)
+							{
+								// 大于前顶， 前底失效 前顶失效
+								kx->flag = DIR_DN;
+								kxld->flag = DIR_XBH;
+								kxlg->flag = DIR_0;
+								
+								gdnum++;
+								jg = 1;
+								jg2 = 1;
+								
+								kxl = kx;
+								kxld = kx;
+							}
+						}
+					}
+				}					
+			}
+		} // end 顶底
+		else 
+		{
+			// do nothing
+		} // end else  非顶底
+	} // end for 标出顶底分型
+	
+	// 当下 
+	kxt = kxData.end();
+	kxt--; // 最后一根K线
+	// 非顶 非底 用于判断当下 顶底未成之前
+	// 创新高 低 必然产生新的高点和低点 去掉前一个高低点 注意必须是高高 低低
+	if (DIR_UP == kxl->flag)
+	{
+		if(kxt->high > kxl->high)
+		{
+			kxl->flag = DIR_SBH;
+		}
+	}
+	else if(DIR_DN == kxl->flag)
+	{
+		if (kxt->low < kxl->low)
+		{
+			kxl->flag = DIR_XBH;
+		}
+	}	
 }
 
 CKXIT ChanlunCore::getCKX(int num)
